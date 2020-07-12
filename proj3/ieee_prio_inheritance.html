@@ -1,0 +1,92 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+	<title>Home Organization Selection</title> 
+	<meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width" />
+    <link href="/inc/classifyDevice.php" rel="stylesheet" type="text/css" />
+</head>
+<body bgcolor="#ffffff" onLoad="if (document.IdPList && document.IdPList.Select) document.IdPList.Select.focus()">
+<script language="JavaScript" type="text/javascript">
+<!--
+function showConfirmation(){
+	
+	return confirm(unescape('Are you sure that you want to set the selected entry as your default Home Organization? Don\'t do this if you use several AAI accounts.'));
+}
+
+function checkForm(){
+	if(document.IdPList.user_idp && document.IdPList.user_idp.selectedIndex == 0){
+		alert(unescape('You must select a valid Home Organization.'));
+		return false;
+	} else {
+		if (document.IdPList.permanent && document.IdPList.permanent.checked){
+			return showConfirmation();
+		} else {
+			return true;
+		}
+	}
+}
+-->
+</script>
+
+<div id="wrapper">
+  <div id="ncsu-brand-bar">
+    <!-- Begin NCSU branding bar -->
+    <link rel="stylesheet" type="text/css" href="/brand/utility-bar/iframe/css/utility_bar_iframe.css" media="screen" />
+    <iframe name="ncsu_branding_bar" id="ncsu_branding_bar" frameborder="0" src="/brand/utility-bar/iframe/index.php?color=black&amp;inurl=&amp;center=yes" scrolling="no">
+    Your browser does not support inline frames or
+    is currently configured  not to display inline frames.<br />
+    Visit <a href="http://ncsu.edu/">http://www.ncsu.edu</a>.
+    </iframe>
+    <!-- End NCSU branding bar -->
+</div>
+
+<div id="container">
+<div id="header">
+        <div class="logo"><a href="http://ncsu.edu"><img
+         src="/inc/stripbrick-whiteonred.gif"></a></div>
+        <h1>Shibboleth - Secure Login</h1>
+    </div>
+<div class="login-field">
+<!-- Body: Start -->
+<!-- Identity Provider Selection: Start-->
+<h1>Select your Home Organization</h1> 
+<p class="switchaai">
+	In order to access a Resource on host <tt>'prox.lib.ncsu.edu'</tt> you must authenticate yourself.</p>
+
+<form id="IdPList" name="IdPList" method="post" onSubmit="return checkForm()" action="/ds/ncsu/WAYF.php?entityID=https%3a%2f%2fprox.lib.ncsu.edu%2fezproxy%2fshibboleth&amp;return=https%3a%2f%2flogin.prox.lib.ncsu.edu%2fShibboleth.sso%2fDS%3fSAMLDS%3d1%26target%3dezp.2aHR0cHM6Ly9pZWVleHBsb3JlLmllZWUub3JnL2llbHgxLzEyLzIwNjYvMDAwNTcwNTgucGRmP3RwPSZhcm51bWJlcj01NzA1OCZpc251bWJlcj0yMDY2JnJlZj1hSFIwY0hNNkx5OXBaV1ZsZUhCc2IzSmxMbWxsWldVdWIzSm5MMlJ2WTNWdFpXNTBMelUzTURVNEwyRjFkR2h2Y25NPQ%2d%2d">
+	<p>
+		<select name="user_idp"> 
+			<option value="-" >Select the Home Organization you are affiliated with ...</option>
+		
+		<option value="https://shib.ncsu.edu/idp/shibboleth" selected="selected">NC State Unity Users</option>
+		<option value="https://shib2.lib.ncsu.edu/idp/shibboleth">NC State Library Patrons</option>		</select>
+		<input type="submit" name="Select" accesskey="s" tabindex="10" value="Select" > 
+	</p>
+	<p>
+		<input tabindex="8" type="checkbox"  name="session" id="session" value="true">
+		<span class="warning"><label for="session">Remember selection for this web browser session.</label></span><br>
+			</p>
+</form>
+<!-- Identity Provider Selection: End-->
+<!-- Body: End -->
+</div>
+<!--FOOTER-->
+<div id="footer">
+      <p><a href="http://oit.ncsu.edu/iam/shibboleth/">Shibboleth</a>
+         service is provided by the
+         <a href="http://oit.ncsu.edu/">Office of Information Technology</a>
+         at <a href="http://www.ncsu.edu/">NC State University</a>
+      </p>
+     <div id="oit-logo">
+        <a href="http://oit.ncsu.edu" border="0" target="oit"><img src="/inc/oit.jpg" align="right" alt="Office of Information Technology" /></a>
+     </div>
+    </div>
+<!--END FOOTER-->
+</div>
+
+
+</div>
+
+</body></html>
+

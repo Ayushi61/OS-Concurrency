@@ -1,0 +1,210 @@
+/*  main.c  - main */
+
+#include <xinu.h>
+void sync_printf(char *fmt, ...)
+{
+        intmask mask = disable();
+        void *arg = __builtin_apply_args();
+        __builtin_apply((void*)kprintf, arg, 100);
+        restore(mask);
+}
+process increment1(uint32 *x, uint32 n1, pi_lock_t *mutex1){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++){
+		//sync_printf("thread %d with prio %d mutex1\n",currpid,proctab[currpid].prprio); 
+		pi_lock(mutex1);
+		(*x)+=1;
+		sleepms(50);
+
+	for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		pi_unlock(mutex1);
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	return OK;
+}
+
+process increment2(uint32 *x, uint32 n1, pi_lock_t *mutex1){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++)
+	{
+		//sync_printf("thread %d with prio %d mutex1\n",currpid,proctab[currpid].prprio); 
+		pi_lock(mutex1);
+		(*x)+=1;
+		//sync_printf("locked 9\n");
+		sleepms(50);
+		//sync_printf("done sleeping \n");
+
+		for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		pi_unlock(mutex1);
+		//sync_printf("unlocked 9\n");
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	return OK;
+	
+}
+
+process increment3(uint32 *x,uint32 *y, uint32 n1,uint32 n2, pi_lock_t *mutex1,pi_lock_t *mutex2){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++){
+		//sync_printf("thread %d with prio %d mutex1\n",currpid,proctab[currpid].prprio); 
+		pi_lock(mutex1);
+		(*x)+=1;
+		sleepms(50);
+		for (k=0; k<n2; k++){
+			//sync_printf("thread %d with prio %d mutex2\n",currpid,proctab[currpid].prprio);
+			pi_lock(mutex2);
+			(*y)+=1;
+			//sync_printf("in main post lock proc %d\n",currpid);
+			sleepms(50);
+			//sync_printf("nested\n");
+			for (l=0; l<10000; l++);
+			//sleep(QUANTUM);
+			yield();
+			pi_unlock(mutex2);
+		}
+		for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		pi_unlock(mutex1);
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	
+	return OK;
+}
+
+process increment(uint32 *x,uint32 n1, pi_lock_t *mutex1){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++){
+		 
+		pi_lock(mutex1);
+		(*x)+=1;
+		//sleepms(20);
+		for (j=0; j<10000; j++);
+		yield();
+		pi_unlock(mutex1);
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	
+	return OK;
+}
+
+
+process nthreads(uint32 nt, uint32 *x,uint32 n1, pi_lock_t *mutex1, int sleep){
+	pid32 pids[nt];
+	int i;
+	for (i=0; i < nt; i++){
+		pids[i] = create((void *)increment, INITSTK, i+1,"p", 3, x,n1, mutex1);
+		if (pids[i]==SYSERR){
+			kprintf("nthreads():: ERROR - could not create process");
+			return SYSERR;
+		}
+	}
+	for (i=0; i < nt; i++){
+		if (resume(pids[i]) == SYSERR){
+			kprintf("nthreads():: ERROR - could not resume process");
+			return SYSERR;
+		}
+		//sleepms(10);
+	}
+	//for (i=0; i < nt; i++) receive();
+	//pids[0]=create((void *)increment, INITSTK, 1,"p", 6, x,y ,n1,n2, mutex1,mutex2);
+	//pids[1]=create((void *)increment1, INITSTK, 2,"p", 4, y ,n2, mutex2);
+	//pids[2]=create((void *)increment2, INITSTK, 3,"p", 4, x ,n1, mutex1);
+	//resume(pids[0]);
+	//sleepms(100);
+	//resume(pids[1]);
+	//sleepms(50);
+	//resume(pids[2]);
+	//sleepms(50);
+	//receive();
+	//sync_printf("print 1111111111111111111111111111111111111 recieve\n");
+	//sleepms(50);
+	//receive();
+	//sync_printf("print 222222222222222222222222222222222 recieve\n");
+	//sleepms(50);
+	//receive();
+	//sleepms(50);
+	for (i=0; i < nt; i++) receive();
+	return OK;
+}
+
+process	main(void)
+{
+	uint32 x,y;			// shared variable
+	unsigned nt;			// number of threads cooperating
+	unsigned value1 = 3;// iterations
+	unsigned value2 = 3;
+	unsigned value = 20;
+	pi_lock_t mutex1;  			// lock
+	pi_lock_t mutex2;
+	pi_lock_t mutex; 
+	kprintf("\n\n=====       Testing the LOCK w/ sleep&guard         =====\n");
+	x = 0;y=0;	nt = 4;
+ 	pi_initlock(&mutex);
+	// 10 threads
+	kprintf("\n\n================= TEST 1 = 10 threads ===================\n");
+	x = 0;	nt = 4;
+ 	pi_initlock(&mutex); 
+	resume(create((void *)nthreads, INITSTK, 1,"nthreads", 4, nt, &x, value/nt, &mutex));
+	receive(); 
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value, x);
+	if (x==value) kprintf("TEST PASSED.\n"); else kprintf("TEST FAILED.\n");
+
+	// 20 threads
+        kprintf("\n\n================= TEST 2 = 20 threads ===================\n");
+        x = 0;  nt = 5;
+ 	pi_initlock(&mutex); 
+        resume(create((void *)nthreads, INITSTK, 1,"nthreads", 4, nt, &x, value/nt, &mutex));
+        receive();
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value, x);
+        if (x==value) kprintf("TEST PASSED.\n"); else kprintf("TEST FAILED.\n");
+
+	// 50 threads
+        kprintf("\n\n================= TEST 3 = 50 threads ===================\n");
+        x = 0;  nt = 10;
+ 	pi_initlock(&mutex); 
+        resume(create((void *)nthreads, INITSTK, 1,"nthreads", 4, nt, &x, value/nt, &mutex));
+        receive();
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value, x);
+        if (x==value) kprintf("TEST PASSED.\n"); else kprintf("TEST FAILED.\n");
+
+	kprintf("\n\n=====       Testing the priority inversion      =====\n");
+	
+
+	// 10 threads
+	kprintf("\n\n================= TEST 1-> 3 threads, 1 nested with 2 locks, 2 with 1 locks ===================\n");
+	x = 0;y=0;	nt = 3;
+ 	pi_initlock(&mutex1); 
+	pi_initlock(&mutex2); 
+	pid32 pids[3];
+	//resume(create((void *)nthreads, INITSTK, 1,"nthreads", 7, nt, &x,&y, value1/nt,value2/nt, &mutex1, &mutex2));
+	pids[0]=create((void *)increment3, INITSTK, 1,"p", 6, &x,&y ,value1,value2, &mutex1,&mutex2);
+	pids[1]=create((void *)increment1, INITSTK, 2,"p", 4, &y ,value2, &mutex2);
+	pids[2]=create((void *)increment2, INITSTK, 3,"p", 4, &x ,value1, &mutex1);
+	resume(pids[0]);
+	sleepms(100);
+	resume(pids[1]);
+	sleepms(50);
+	resume(pids[2]);
+	//sleepms(50);
+	receive();
+	//sync_printf("print 1111111111111111111111111111111111111 recieve\n");
+	//sleepms(50);
+	receive();
+	//sync_printf("print 222222222222222222222222222222222 recieve\n");
+	//sleepms(50);
+	receive();
+	//receive(); 
+	sync_printf("%d threads, n=%d\n", nt, value1);
+	sync_printf("%d threads, n=%d\n", nt, value2);
+	//if (x==value1) kprintf("TEST1 PASSED.\n"); else kprintf("TEST1 FAILED.\n");
+	//if (y==value2) kprintf("TEST2 PASSED.\n"); else kprintf("TEST2 FAILED.\n");
+
+	
+
+	return OK;
+}

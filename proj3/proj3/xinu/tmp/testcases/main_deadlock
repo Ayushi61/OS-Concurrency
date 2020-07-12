@@ -1,0 +1,363 @@
+/*  main.c  - main */
+
+#include <xinu.h>
+#define ACTIVE_LOCK
+#define ACTIVE_TRY_LOCK
+void sync_printf(char *fmt, ...)
+{
+        intmask mask = disable();
+        void *arg = __builtin_apply_args();
+        __builtin_apply((void*)kprintf, arg, 100);
+        restore(mask);
+}
+process increment1(uint32 *x, uint32 n1, al_lock_t *mutex1){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++){
+		//sync_printf("thread %d with prio %d mutex1\n",currpid,proctab[currpid].prprio); 
+		al_lock(mutex1);
+		(*x)+=1;
+		//sleepms(170);
+
+	for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		al_unlock(mutex1);
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	return OK;
+}
+
+process increment2(uint32 *x, uint32 n1, al_lock_t *mutex1){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++)
+	{
+		//sync_printf("thread %d with prio %d mutex1\n",currpid,proctab[currpid].prprio); 
+		al_lock(mutex1);
+		(*x)+=1;
+		//sync_printf("locked 9\n");
+		//sleepms(70);
+		//sync_printf("done sleeping \n");
+
+		for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		al_unlock(mutex1);
+		//sync_printf("unlocked 9\n");
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	return OK;
+	
+}
+
+process increment(uint32 *x,uint32 *y, uint32 n1,uint32 n2, al_lock_t *mutex1,al_lock_t *mutex2){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++){
+		//sync_printf("thread %d with lock %d \n",currpid,mutex1); 
+		al_lock(mutex1);
+		(*x)+=1;
+		//sync_printf("sleeping 70\n");
+		sleepms(100);
+		//sync_printf("out of sleep1 pid=%d, %d\n",currpid,mutex1);
+		for (k=0; k<n2; k++){
+			//sync_printf("thread %d with lock %d \n",currpid,mutex2);
+			al_lock(mutex2);
+			(*y)+=1;
+			//sync_printf("in main post lock proc %d\n",currpid);
+			//sync_printf("sleeping 70\n");
+			sleepms(300);
+			//sync_printf("out of sleep2,pid=%d%d\n",currpid,mutex2);
+			//sync_printf("nested\n");
+			for (l=0; l<10000; l++);
+			//sleep(QUANTUM);
+			yield();
+			//sync_printf("unclocking2,pid=%d %d\n",currpid,mutex2);
+			al_unlock(mutex2);
+		}
+		for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		//sync_printf("unclocking1 pid=%d ,%d\n",currpid,mutex1);
+		al_unlock(mutex1);
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	
+	return OK;
+}
+
+process increment_try(uint32 *x,uint32 *y, uint32 n1,uint32 n2, al_lock_t *mutex1,al_lock_t *mutex2){
+	uint32 i, j,k,l;	
+	for (i=0; i<n1; i++){
+		//sync_printf("thread %d with lock %d \n",currpid,mutex1); 
+		back:while(al_trylock(mutex1))
+			yield();
+		(*x)+=1;
+		//sync_printf("sleeping 70\n");
+		sleepms(100);
+		//sync_printf("out of sleep1 pid=%d, %d\n",currpid,mutex1);
+		for (k=0; k<n2; k++){
+			//sync_printf("thread %d with lock %d \n",currpid,mutex2);
+			
+			while(al_trylock(mutex2))
+			{
+				int i;
+				
+				(*x)-=1;
+				al_unlock(mutex1);
+				//increment_try(x,y,n1,n2,mutex1,mutex2);
+				//sync_printf("");
+				sleepms(100);
+				
+				goto back;
+				//return OK;
+			}
+			(*y)+=1;
+			//sync_printf("in main post lock proc %d\n",currpid);
+			//sync_printf("sleeping 70\n");
+			sleepms(300);
+			//sync_printf("out of sleep2,pid=%d%d\n",currpid,mutex2);
+			//sync_printf("nested\n");
+			for (l=0; l<10000; l++);
+			//sleep(QUANTUM);
+			yield();
+			//sync_printf("unclocking2,pid=%d %d\n",currpid,mutex2);
+			al_unlock(mutex2);
+		}
+		for (j=0; j<10000; j++);
+		//sleep(QUANTUM);
+		yield();
+		//sync_printf("unclocking1 pid=%d ,%d\n",currpid,mutex1);
+		al_unlock(mutex1);
+	}
+	//sync_printf("process %d is completed\n",currpid);
+	
+	return OK;
+}
+
+
+process nthreads(uint32 nt, uint32 *x,uint32 *y,uint32 *z,uint32 n1,uint32 n2, al_lock_t *mutex1,al_lock_t *mutex2,al_lock_t *mutex3){
+	pid32 pids[nt];
+	int i;
+	//al_lock_t mutex3;
+	//int z=0;
+	//al_initlock(&mutex3); 
+	//for (i=0; i < nt; i++){
+	//	pids[i] = create((void *)increment, INITSTK, i+1,"p", 6, x,y ,n1,n2, mutex1,mutex2);
+	//	if (pids[i]==SYSERR){
+	//		kprintf("nthreads():: ERROR - could not create process");
+	//		return SYSERR;
+	//	}
+	//}
+	//for (i=0; i < nt; i++){
+	//	if (resume(pids[i]) == SYSERR){
+	//		kprintf("nthreads():: ERROR - could not resume process");
+	//		return SYSERR;
+	//	}
+	//	sleepms(10);
+	//}
+	//for (i=0; i < nt; i++) receive();
+	pids[0]=create((void *)increment, INITSTK, 1,"p", 6, x,y ,1,1, mutex1,mutex2);
+	pids[1]=create((void *)increment, INITSTK, 1,"p", 6, y,z ,1,1, mutex2,mutex3);
+	pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, z ,1, mutex3);
+	//pids[1]=create((void *)increment1, INITSTK, 1,"p", 4, y ,n2, mutex2);
+	//pids[2]=create((void *)increment2, INITSTK, 3,"p", 4, x ,n1, mutex1);
+	resume(pids[0]);
+	sleepms(50);
+	resume(pids[1]);
+	sleepms(50);
+	resume(pids[2]);
+	
+	receive();
+	//sleepms(50);
+	receive();
+	//sleepms(50);
+	receive();
+	//sleepms(50);
+	sleepms(50);
+	//for (i=0; i < nt; i++) receive();
+	return OK;
+}
+
+process	main(void)
+{
+	uint32 x,y,z,a,b,c;			// shared variable
+	unsigned nt;			// number of threads cooperating
+	unsigned value1 = 9;// target value of variable
+	unsigned value2 = 9;
+	al_lock_t mutex1;  			// lock
+	al_lock_t mutex2;
+	al_lock_t mutex3;
+	al_lock_t mutex4;  			// lock
+	al_lock_t mutex5;
+	al_lock_t mutex6;
+	x = 0;y=0;z=0;	nt = 6;
+	a = 0;b=0;c=0;	nt = 6;
+ 	al_initlock(&mutex1); 
+	al_initlock(&mutex2); 
+	al_initlock(&mutex3);
+	al_initlock(&mutex4); 
+	al_initlock(&mutex5); 
+	al_initlock(&mutex6);
+	pid32 pids[nt];
+	kprintf("\n\n=====       Testing the deadlock        =====\n");
+	#ifdef ACTIVE_LOCK 
+	// 10 threads
+	kprintf("\n\n================= TEST 1 = 1 DEADLOCK WITH 6 locks, 1 process not a part of deadlock ===================\n");
+	
+	pids[0]=create((void *)increment, INITSTK, 1,"p", 6, &x,&y ,1,1, &mutex1,&mutex2);
+	pids[1]=create((void *)increment, INITSTK, 1,"p", 6, &y,&z ,1,1, &mutex2,&mutex3);
+	//pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, &z ,1, &mutex3);
+	pids[2]=create((void *)increment, INITSTK, 1,"p", 6, &z,&x ,1,1, &mutex3,&mutex4);
+	//pids[3]=create((void *)increment1, INITSTK, 1,"p", 4, &y ,1, &mutex2);
+	pids[3]=create((void *)increment, INITSTK, 1,"p", 6, &a,&b ,1,1, &mutex4,&mutex5);
+	pids[4]=create((void *)increment, INITSTK, 1,"p", 6, &b,&c ,1,1, &mutex5,&mutex6);
+	//pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, &z ,1, &mutex3);
+	pids[5]=create((void *)increment, INITSTK, 1,"p", 6, &c,&a ,1,1, &mutex6,&mutex1);
+	pids[6]=create((void *)increment2, INITSTK, 1,"p", 4, &x ,1, &mutex1);
+	resume(pids[0]);
+	sleepms(50);
+	resume(pids[1]);
+	sleepms(50);
+	resume(pids[2]);
+	sleepms(50);
+	resume(pids[3]);
+	//resume(pids[0]);
+	sleepms(50);
+	resume(pids[4]);
+	sleepms(50);
+	resume(pids[5]);
+	sleepms(50);
+	resume(pids[6]);
+	receive();
+	receive();
+	receive();
+	receive();
+	//sleepms(50);
+	receive();
+	//sleepms(50);
+	receive();
+	receive();
+	//sleepms(50);
+	sleepms(50);
+	//resume(create((void *)nthreads, INITSTK, 1,"nthreads", 9, nt, &x,&y,&z, value1/nt,value2/nt, &mutex1, &mutex2,&mutex3));
+	//receive(); 
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, x);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, y);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, z);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, a);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, b);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, c);
+	//sync_printf("%d threads, n=%d, target value=%d\n", nt, value2, y);
+	//if (x==value1) kprintf("TEST1 PASSED.\n"); else kprintf("TEST1 FAILED.\n");
+	//if (y==value2) kprintf("TEST2 PASSED.\n"); else kprintf("TEST2 FAILED.\n");
+
+	kprintf("\n\n================= TEST 2 - multiple deadlocks -2 DEADLOCKS(3 LOCKS EACH) ===================\n");
+	x = 0;y=0;z=0;	nt = 6;
+	a = 0;b=0;c=0;	nt = 6;
+ 	
+	//pid32 pids[nt];
+	pids[0]=create((void *)increment, INITSTK, 1,"p", 6, &x,&y ,1,1, &mutex1,&mutex2);
+	pids[1]=create((void *)increment, INITSTK, 1,"p", 6, &y,&z ,1,1, &mutex2,&mutex3);
+	//pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, &z ,1, &mutex3);
+	pids[2]=create((void *)increment, INITSTK, 1,"p", 6, &z,&x ,1,1, &mutex3,&mutex1);
+	pids[3]=create((void *)increment1, INITSTK, 1,"p", 4, &y ,1, &mutex2);
+	pids[4]=create((void *)increment, INITSTK, 1,"p", 6, &a,&b ,1,1, &mutex4,&mutex5);
+	pids[5]=create((void *)increment, INITSTK, 1,"p", 6, &b,&c ,1,1, &mutex5,&mutex6);
+	//pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, &z ,1, &mutex3);
+	pids[6]=create((void *)increment, INITSTK, 1,"p", 6, &c,&a ,1,1, &mutex6,&mutex4);
+	resume(pids[0]);
+	sleepms(50);
+	resume(pids[1]);
+	sleepms(50);
+	resume(pids[2]);
+	sleepms(50);
+	resume(pids[3]);
+	//resume(pids[0]);
+	sleepms(50);
+	resume(pids[4]);
+	sleepms(50);
+	resume(pids[5]);
+	sleepms(50);
+	resume(pids[6]);
+	receive();
+	receive();
+	receive();
+	receive();
+	//sleepms(50);
+	receive();
+	//sleepms(50);
+	receive();
+	receive();
+	//sleepms(50);
+	sleepms(50);
+	//resume(create((void *)nthreads, INITSTK, 1,"nthreads", 9, nt, &x,&y,&z, value1/nt,value2/nt, &mutex1, &mutex2,&mutex3));
+	//receive(); 
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, x);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, y);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, z);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, a);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, b);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, c);
+	//sync_printf("%d threads, n=%d, target value=%d\n", nt, value2, y);
+	//if (x==value1) kprintf("TEST1 PASSED.\n"); else kprintf("TEST1 FAILED.\n");
+	//if (y==value2) kprintf("TEST2 PASSED.\n"); else kprintf("TEST2 FAILED.\n");
+	#endif
+	sleepms(100);
+	#ifdef ACTIVE_TRY_LOCK
+	kprintf("\n\n=================Avoid Deadlock with 6 locks using try lock ===================\n");
+	x = 0;y=0;z=0;	nt = 6;
+	a = 0;b=0;c=0;	nt = 6;
+	
+ 	
+	//pid32 pids[nt];
+	pids[0]=create((void *)increment_try, INITSTK, 1,"p", 6, &x,&y ,1,1, &mutex1,&mutex2);
+	pids[1]=create((void *)increment_try, INITSTK, 1,"p", 6, &y,&z ,1,1, &mutex2,&mutex3);
+	//pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, &z ,1, &mutex3);
+	pids[2]=create((void *)increment_try, INITSTK, 1,"p", 6, &z,&x ,1,1, &mutex3,&mutex4);
+	//pids[3]=create((void *)increment1, INITSTK, 1,"p", 4, &y ,1, &mutex2);
+	pids[3]=create((void *)increment_try, INITSTK, 1,"p", 6, &a,&b ,1,1, &mutex4,&mutex5);
+	pids[4]=create((void *)increment_try, INITSTK, 1,"p", 6, &b,&c ,1,1, &mutex5,&mutex6);
+	//pids[2]=create((void *)increment1, INITSTK, 1,"p", 4, &z ,1, &mutex3);
+	pids[5]=create((void *)increment_try, INITSTK, 1,"p", 6, &c,&a ,1,1, &mutex6,&mutex1);
+	pids[6]=create((void *)increment2, INITSTK, 1,"p", 4, &x ,1, &mutex1);
+	resume(pids[0]);
+	sleepms(50);
+	resume(pids[1]);
+	sleepms(50);
+	resume(pids[2]);
+	sleepms(50);
+	resume(pids[3]);
+	//resume(pids[0]);
+	sleepms(50);
+	resume(pids[4]);
+	sleepms(50);
+	resume(pids[5]);
+	sleepms(50);
+	resume(pids[6]);
+	receive();
+	receive();
+	receive();
+	receive();
+	//sleepms(50);
+	receive();
+	//sleepms(50);
+	receive();
+	receive();
+	//sleepms(50);
+	sleepms(50);
+	//resume(create((void *)nthreads, INITSTK, 1,"nthreads", 9, nt, &x,&y,&z, value1/nt,value2/nt, &mutex1, &mutex2,&mutex3));
+	//receive(); 
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, x);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, y);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, z);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, a);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, b);
+	sync_printf("%d threads, n=%d, target value=%d\n", nt, value1, c);
+	//sync_printf("%d threads, n=%d, target value=%d\n", nt, value2, y);
+	//if (x==value1) kprintf("TEST1 PASSED.\n"); else kprintf("TEST1 FAILED.\n");
+	//if (y==value2) kprintf("TEST2 PASSED.\n"); else kprintf("TEST2 FAILED.\n");
+	#endif
+
+	
+
+	return OK;
+}

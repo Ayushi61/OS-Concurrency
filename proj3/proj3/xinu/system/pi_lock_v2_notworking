@@ -1,0 +1,292 @@
+#include <xinu.h>
+pri16 restoreq_locks(pid32 pid);
+pri16 restoreq(pid32 pid,qid16 q);
+void removeq(pid32 pid);
+void change_prio(pid32 pid,pri16 newPrio);
+void pi_park(pi_lock_t *l);
+void pi_unpark(pid32 pid);
+void pi_setpark(void);
+syscall pi_initlock(pi_lock_t* l)
+{
+	pi_nlockCount++;
+	if(pi_nlockCount>NPILOCKS)
+		return SYSERR;
+	l->lock=0; /* lock =0 implies lock is available, lock=1 implies lock is held*/
+	l->guard=0;
+	l->q=newqueue();
+	l->prio=1;
+	return OK;
+}
+
+syscall pi_lock(pi_lock_t* l)
+{
+	//kprintf("in pi_lock proc %d \n", currpid);
+	while(test_and_set(&l->guard,1)==1)
+		sleep(QUANTUM);  /*spin lock on guard*/
+	if(l->lock==0)
+	{
+		l->lock=1;
+		struct procent *curr_prptr;
+		curr_prptr=&proctab[currpid];
+		curr_prptr->pr_locks[curr_prptr->pr_tot_locks]=l;
+		curr_prptr->pr_tot_locks+=1;
+		l->prio=curr_prptr->prprio;
+		l->pid=currpid; 
+		//kprintf("%d is acquiring lock %d \n",currpid,l);
+		l->guard=0;
+		
+	}
+	else
+	{
+		//kprintf("##########################enqueue %d\n",currpid);
+		//kprintf("init_prio %d:%d and %d \n", proctab[l->pid].prioinit,l->pid,currpid);
+		enqueue(currpid,l->q);
+		struct procent *lprptr;
+		struct procent *curr_prptr;
+		lprptr=&proctab[l->pid];
+		curr_prptr=&proctab[currpid];
+		l->prio=restoreq(currpid,l->q);
+		if(lprptr->prprio < l->prio)
+		{
+			//l->prio=traverse_prio(l->q);
+			//l->prio=curr_prptr->prprio;
+			//kprintf("priority of lock %d is %d\n",l,l->prio );
+			change_prio(l->pid,curr_prptr->prprio);
+		}
+		pi_setpark();
+		l->guard=0;
+		pi_park(l);
+		//l->pid=currpid;
+	}
+	
+	return OK;
+}
+syscall pi_unlock(pi_lock_t* l)
+{
+	if(l->pid!=currpid)
+	{
+		kprintf("syserror check l->pid = %d process= %d", l->pid, currpid);
+		return SYSERR;	
+	}
+	//kprintf("inside unclock \n");
+	while(test_and_set(&l->guard,1)==1)
+		sleep(QUANTUM);  /*spin lock on guard*/
+	//kprintf("guard =0\n");
+	
+	struct procent *prptr;
+	prptr=&proctab[l->pid];
+	int i,k;
+	/*remove locks from the list of locks of the process */
+	int flag=0;
+	//kprintf("total locks held by %d is %d\n",l->pid,prptr->pr_tot_locks);
+	for(i=0;i<prptr->pr_tot_locks;i++)
+	{
+		if(prptr->pr_locks[i]==l)
+		{
+			for(k=i;k<prptr->pr_tot_locks-1;k++)
+			{
+				prptr->pr_locks[k]=prptr->pr_locks[k+1];
+			}
+			flag=1;
+		}
+	}
+	if(flag==1)
+		prptr->pr_tot_locks-=1;
+	
+	/* if priorities are not the same as initial priority then: */
+	if(prptr->prprio!=prptr->prioinit)
+	{	
+		
+		//kprintf("this is restore for P%d\n",l->pid);
+		if(prptr->pr_tot_locks>0)
+		{
+			pri16 prio=restoreq_locks(l->pid);
+			//l->prio=prio;
+			change_prio(l->pid,prio);
+		}
+		else
+			change_prio(l->pid,prptr->prioinit);
+	}
+	if(isempty(l->q))
+	{
+		l->lock=0;
+		//kprintf("unlocked\n");
+	}	
+	else
+	{
+		//l->lock=0;
+		//kprintf("unparking \n");
+		
+		//l->pid=queuetab[queuehead(l->q)].qnext;
+		//pid32 lpid=queuetab[queuehead(l->q)].qnext;
+		//kprintf("this is prio_inver for proc %d\n",l->pid);
+		//pri16 prio=restoreq(lpid,l->q);
+		//l->prio=prio;
+		//change_prio(l->pid,prio);
+		//proctab[lpid].pr_locks[proctab[lpid].pr_tot_locks]=l;
+		//proctab[lpid].pr_tot_locks+=1;
+		//proctab[l->pid].prprio=prio;
+		//kprintf("dequeue %d \n",firstid(l->q));
+		//proctab[currpid].prprio=proctab[currpid].prioinit;
+		//kprintf("%d is acquiring lock %d with prio=%d \n",firstid(l->q),l,proctab[l->pid].prprio);
+		pi_unpark(dequeue(l->q));
+	}
+	l->guard=0;
+	//kprintf("unlock Done of process %d for locks %d!!!!!!!!!!!!!!!!!!!!!!!!!!\n",currpid,l); 
+	return OK;
+}
+
+
+void pi_park(pi_lock_t *l)
+{
+	intmask	mask;			/* Saved interrupt mask		*/
+	mask = disable();
+	if(proctab[currpid].prpark==1)
+	{
+		proctab[currpid].prstate = PR_SLEEP;
+		//kprintf("going to sleep %d\n",currpid);
+		resched();
+		l->pid=currpid;
+		pri16 prio=restoreq(l->pid,l->q);
+		l->prio=prio;
+		//change_prio(l->pid,prio);
+		proctab[l->pid].pr_locks[proctab[l->pid].pr_tot_locks]=l;
+		proctab[l->pid].pr_tot_locks+=1;
+	}
+	restore(mask);
+}
+
+void pi_unpark(pid32 pid)
+{
+	intmask	mask;			/* Saved interrupt mask		*/
+	mask = disable();
+	//pid32 pid;
+	//pid=dequeue(q);
+	if(proctab[pid].prpark==1)
+	{
+		proctab[pid].prpark=0;
+		//kprintf("unsetting park of process %d to 0 \n",pid);
+	}
+	proctab[pid].prstate = PR_READY;
+	insert(pid, readylist, proctab[pid].prprio);
+	//proctab[pid].prprio=5;
+	//proctab[currpid].prprio=1;
+	////kprintf("dequeueing pid %d\n",pid);
+	//ready(pid);
+	
+	//kprintf("dequeueing pid %d\n",pid);
+	restore(mask);
+}
+
+void pi_setpark(void)
+{
+	intmask	mask;			/* Saved interrupt mask		*/
+	mask = disable();
+	////kprintf("setting park of process %d to 1 \n",currpid);
+	proctab[currpid].prpark = 1;
+	
+	restore(mask);
+
+}
+
+void change_prio(pid32 pid,pri16 newPrio)
+{
+
+	intmask	mask;			/* Saved interrupt mask		*/
+	mask = disable();
+	
+	struct procent *prptr;
+	prptr=&proctab[pid];
+	pid32 oldprio=prptr->prprio;
+	if(oldprio!=newPrio)
+	{
+		prptr->prprio=newPrio;
+		//if(newPrio>oldprio)
+		kprintf("priority change=P%d::%d-%d \n",pid,oldprio,newPrio);
+		//else
+		//kprintf("priority change=P%d::%d-%d\n",pid,oldprio,newPrio);
+		if(prptr->prstate==PR_READY)
+		{
+			removeq(pid);
+		/* insert back as per new priority and call resched*/
+			insert(pid, readylist, proctab[pid].prprio);
+		}
+
+	}
+
+}
+pri16 restoreq_locks(pid32 pid)
+{
+	struct procent *prptr;
+	prptr=&proctab[pid];
+	int i;
+	pri16 max= prptr->prioinit;
+	pid32 next;
+	for(i=0;i<prptr->pr_tot_locks;i++)
+	{
+		pi_lock_t *l1 = prptr->pr_locks[prptr->pr_tot_locks];
+		if (l1->prio > max)
+			max=l1->prio;
+	}
+	//kprintf("restoring prio from %d to %d\n",prptr->prprio,max);
+	return max;
+
+}
+pri16 restoreq(pid32 pid,qid16 q)
+{
+	struct procent *prptr;
+	prptr=&proctab[pid];
+	int i;
+	pri16 max= prptr->prioinit;
+	pid32 next;
+	//for(i=0;i<prptr->pr_tot_locks;i++)
+	//{
+	//	pi_lock_t *l = prptr->pr_locks[prptr->pr_tot_locks];
+	//	if (l->prio > max)
+	//		max=l->prio;
+	//}
+	if(nonempty(q))
+	{
+		pri16 max2=proctab[firstid(q)].prprio;
+		//kprintf("lastid of q is %d\n",lastid(q));
+		//kprintf("firstid of q is %d \n",firstid(q));
+		if(lastid(q)!=firstid(q))
+		{
+			next=firstid(q);
+			if(max2>max)
+				max=max2;
+			while(next!=lastid(q))
+			{
+				
+				//kprintf("prio of %d is %d\n",next,max2);
+				next=queuetab[next].qnext;				
+				max2=proctab[next].prprio;
+				if(max2>max)
+					max=max2;
+				
+
+			}
+		}
+		//kprintf("max2 is %d$$$$$\n",max2);
+		//kprintf("max is %d \n",max);
+	}
+	//kprintf("restoring prio from %d to %d\n",prptr->prprio,max);
+	return max;
+}
+
+void removeq(pid32 pid)
+{
+	/*remove entry from queue and put it back as per new priority */
+	int16 prev,next;
+	prev=queuetab[pid].qprev;
+	next=queuetab[pid].qnext;
+	queuetab[next].qprev=prev;
+	queuetab[prev].qnext=next;
+	queuetab[pid].qprev=-1;
+	queuetab[pid].qnext=-1;
+	queuetab[pid].qkey=0;
+
+}
+
+
+

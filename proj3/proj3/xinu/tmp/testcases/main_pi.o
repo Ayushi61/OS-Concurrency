@@ -1,0 +1,35 @@
+       Testing the deadlock        =====
+
+
+================= TEST 1 = 1 DEADLOCK WITH 6 locks, 1 process not a part of deadlock ===================
+deadlock detected=P6-P7-P8-P9-P10-P11
+system Error!
+6 threads, n=9, target value=3
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+
+
+================= TEST 2 - multiple deadlocks -2 DEADLOCKS(3 LOCKS EACH) ===================
+deadlock detected=P13-P14-P15
+deadlock detected=P17-P18-P19
+system Error!
+system Error!
+6 threads, n=9, target value=2
+6 threads, n=9, target value=3
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+
+
+=================Avoid Deadlock with 6 locks using try lock ===================
+6 threads, n=9, target value=3
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+6 threads, n=9, target value=2
+
